@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Guide Bordighera</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --sand:#f5efe6;--ocean:#2a6b8a;--sun:#e8a020;--ev:#2e9e5b;
+  --resto:#c0392b;--shop:#8e44ad;--activity:#d35400;--delicat:#1a6b5a;
+  --street:#b5451b;--fav:#e8a020;--text:#1a1a2e;--radius:13px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--sand);color:var(--text);overflow-x:hidden;}
+
+/* ── HEADER ── */
+.header{background:var(--ocean);color:white;padding:12px 14px 8px;display:flex;flex-direction:column;gap:7px;position:sticky;top:0;z-index:400;}
+.header-top{display:flex;align-items:center;gap:10px;}
+.header-top h1{font-family:'Playfair Display',serif;font-size:19px;flex:1;}
+#fav-count{background:var(--fav);color:white;border-radius:12px;padding:2px 8px;font-size:11px;font-weight:600;display:none;}
+.search-wrap{position:relative;}
+#search-input{width:100%;padding:8px 34px 8px 34px;border:none;border-radius:9px;font-size:13px;font-family:'DM Sans',sans-serif;background:rgba(255,255,255,.18);color:white;outline:none;}
+#search-input::placeholder{color:rgba(255,255,255,.6);}
+#search-input:focus{background:rgba(255,255,255,.28);}
+.search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:15px;pointer-events:none;}
+#search-clear{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:rgba(255,255,255,.7);font-size:16px;cursor:pointer;display:none;padding:2px 5px;}
+
+/* ── FILTRES ── */
+.controls{display:flex;flex-wrap:wrap;gap:5px;padding:8px 10px;background:white;border-bottom:1px solid #eee;position:sticky;top:90px;z-index:390;}
+.filter-btn{padding:5px 11px;border:1.5px solid #ddd;border-radius:20px;cursor:pointer;background:white;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:500;color:#555;transition:all .2s;flex-shrink:0;}
+.filter-btn.active{background:var(--ocean);border-color:var(--ocean);color:white;}
+.filter-btn.ev-btn.active{background:var(--ev);border-color:var(--ev);}
+.filter-btn.resto-btn.active{background:var(--resto);border-color:var(--resto);}
+.filter-btn.shop-btn.active{background:var(--shop);border-color:var(--shop);}
+.filter-btn.activity-btn.active{background:var(--activity);border-color:var(--activity);}
+.filter-btn.delicat-btn.active{background:var(--delicat);border-color:var(--delicat);}
+.filter-btn.street-btn.active{background:var(--street);border-color:var(--street);}
+.filter-btn.fav-btn.active{background:var(--fav);border-color:var(--fav);}
+.ev-note{background:#e8f7ef;border-left:4px solid var(--ev);padding:8px 12px;margin:6px 10px 0;border-radius:8px;font-size:12px;color:#1a5c3a;line-height:1.5;}
+
+/* ── MAP ── */
+#map-wrapper{position:relative;}
+#map{height:52vh;width:100%;border-bottom:3px solid var(--ocean);}
+#loc-btn{position:absolute;bottom:14px;right:14px;z-index:399;background:white;border:none;border-radius:50%;width:40px;height:40px;box-shadow:0 2px 8px rgba(0,0,0,.25);cursor:pointer;font-size:20px;display:flex;align-items:center;justify-content:center;}
+#loc-btn.tracking{background:#e0f7ea;}
+@keyframes pulse-ring{0%{transform:scale(1);opacity:.7}70%{transform:scale(2.4);opacity:0}100%{transform:scale(2.4);opacity:0}}
+
+/* ── LISTE ── */
+#list{padding:8px 10px 120px;}
+.search-empty{text-align:center;color:#aaa;padding:40px 20px;font-size:13px;}
+.group-header{display:flex;align-items:center;gap:8px;padding:10px 4px 6px;font-size:13px;font-weight:700;color:#555;border-bottom:1px solid #e0d8cc;margin-bottom:6px;margin-top:12px;}
+.group-header:first-child{margin-top:4px;}
+.group-count{margin-left:auto;font-size:11px;color:#aaa;font-weight:400;}
+
+/* Card – clic simple = focus map ; bouton ℹ️ = fiche */
+.card{background:white;border-radius:var(--radius);padding:11px 13px;box-shadow:0 2px 7px rgba(0,0,0,.07);display:flex;align-items:center;gap:11px;cursor:pointer;transition:transform .15s,box-shadow .15s,background .2s;margin-bottom:7px;}
+.card:hover{box-shadow:0 4px 14px rgba(0,0,0,.13);}
+.card.ev-card{border-left:4px solid var(--ev);}
+.card.resto-card{border-left:4px solid var(--resto);}
+.card.shop-card{border-left:4px solid var(--shop);}
+.card.activity-card{border-left:4px solid var(--activity);}
+.card.delicat-card{border-left:4px solid var(--delicat);}
+.card.street-card{border-left:4px solid var(--street);}
+.card.selected{background:#eaf4fb;box-shadow:0 4px 16px rgba(42,107,138,.18);}
+.card-left{display:flex;flex-direction:column;align-items:center;gap:5px;flex-shrink:0;min-width:32px;}
+.card-icon{font-size:22px;}
+.fav-star{font-size:16px;background:none;border:none;cursor:pointer;padding:0;line-height:1;}
+.card-mid{flex:1;min-width:0;}
+.card-name{font-weight:700;font-size:13px;margin-bottom:1px;line-height:1.3;}
+.card-meta{font-size:11px;color:#888;margin-bottom:3px;}
+.card-desc-short{font-size:12px;color:#666;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+/* Bouton info */
+.info-btn{background:none;border:1.5px solid #ddd;border-radius:50%;width:30px;height:30px;font-size:14px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#666;transition:background .15s;}
+.info-btn:hover{background:#f0f0f0;}
+
+/* Tags */
+.card-tag{display:inline-block;font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;}
+.tag-ionity{background:#dff0ea;color:#1a7a4a;}
+.tag-total{background:#fff0d0;color:#c07000;}
+.tag-becharge{background:#e0eeff;color:#1a4a8a;}
+.tag-goelec{background:#f0e8ff;color:#6020b0;}
+.tag-freshmile{background:#ffe8e8;color:#b02020;}
+.tag-vinci{background:#e8f4ff;color:#005fa3;}
+.tag-aller{background:#fde8e8;color:#b03030;}
+.tag-retour{background:#e8f0fd;color:#3050b0;}
+.tag-aller-retour{background:#f0e8ff;color:#6030a0;}
+
+/* ── BOTTOM SHEET ── */
+#sheet-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:800;}
+#sheet-overlay.open{display:block;}
+#sheet{position:fixed;bottom:0;left:0;width:100%;max-height:90vh;background:white;border-radius:20px 20px 0 0;z-index:900;transform:translateY(100%);transition:transform .32s cubic-bezier(.32,1,.32,1);display:flex;flex-direction:column;}
+#sheet.open{transform:translateY(0);}
+#sheet-handle{width:40px;height:4px;background:#ddd;border-radius:2px;margin:10px auto 2px;flex-shrink:0;}
+#sheet-scroll{overflow-y:auto;flex:1;padding:0 16px 28px;}
+#sheet-header{display:flex;align-items:flex-start;gap:10px;margin-bottom:8px;padding-top:4px;}
+#sheet-icon{font-size:28px;flex-shrink:0;margin-top:2px;}
+#sheet-title-wrap{flex:1;}
+#sheet-name{font-family:'Playfair Display',serif;font-size:17px;font-weight:700;line-height:1.2;}
+#sheet-category{font-size:12px;color:#888;margin-top:2px;}
+#sheet-fav-btn{font-size:24px;background:none;border:none;cursor:pointer;flex-shrink:0;padding:2px;}
+#sheet-rating{display:flex;align-items:center;gap:6px;margin:4px 0 8px;font-size:13px;}
+#sheet-stars{color:#e8a020;}
+#sheet-rating-val{font-weight:700;}
+#sheet-rating-count{color:#aaa;font-size:11px;}
+#sheet-tags{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px;}
+#sheet-desc{font-size:13px;color:#444;line-height:1.6;margin-bottom:12px;}
+#sheet-hours{background:#f9f5ef;border-radius:9px;padding:10px 12px;margin-bottom:12px;font-size:12px;line-height:1.9;}
+#sheet-hours-title{font-weight:700;font-size:12px;color:#555;margin-bottom:3px;}
+#sheet-actions{display:flex;gap:8px;flex-wrap:wrap;}
+.sheet-btn{flex:1;min-width:110px;padding:10px 10px;border:none;border-radius:10px;font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;}
+.sheet-btn.primary{background:var(--ocean);color:white;}
+.sheet-btn.secondary{background:#f0f0f0;color:var(--text);}
+
+/* ── ROUTE PANEL ── */
+#route-panel{display:none;position:fixed;inset:0;z-index:1000;background:white;flex-direction:column;}
+#route-panel.open{display:flex;}
+#route-header{background:var(--ocean);color:white;padding:12px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;}
+#route-header h2{flex:1;font-size:15px;font-family:'Playfair Display',serif;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#route-close{background:none;border:none;color:white;font-size:22px;cursor:pointer;flex-shrink:0;}
+#route-form{padding:10px 12px 8px;background:#f9f5ef;border-bottom:1px solid #e0d8cc;flex-shrink:0;display:flex;flex-direction:column;gap:7px;}
+.route-row{display:flex;align-items:center;gap:8px;}
+.route-lbl{font-size:18px;width:26px;text-align:center;flex-shrink:0;}
+.route-input{flex:1;padding:7px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;font-family:'DM Sans',sans-serif;background:white;color:var(--text);}
+.route-input:focus{outline:none;border-color:var(--ocean);}
+.route-modes{display:flex;gap:5px;padding-left:34px;}
+.mode-btn{padding:4px 10px;border:1.5px solid #ddd;border-radius:14px;cursor:pointer;background:white;font-size:12px;font-family:'DM Sans',sans-serif;color:#555;transition:all .2s;}
+.mode-btn.active{background:var(--ocean);border-color:var(--ocean);color:white;}
+#route-go{width:100%;padding:9px;background:var(--ocean);color:white;border:none;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;}
+#route-go:disabled{background:#aaa;cursor:not-allowed;}
+#route-map{flex:1;width:100%;min-height:0;}
+#route-summary{padding:8px 14px;font-size:12px;color:#555;background:#f9f5ef;border-top:1px solid #e0d8cc;flex-shrink:0;min-height:32px;}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-top">
+    <span style="font-size:22px">🌴</span>
+    <h1>Guide Bordighera</h1>
+    <span id="fav-count">0 ❤️</span>
+  </div>
+  <div class="search-wrap">
+    <span class="search-icon">🔍</span>
+    <input id="search-input" placeholder="Rechercher un lieu, une spécialité…" oninput="onSearch(this.value)"/>
+    <button id="search-clear" onclick="clearSearch()">✕</button>
+  </div>
+</div>
+
+<div class="controls">
+  <button class="filter-btn active"       onclick="filterMarkers('all',this)">Tout</button>
+  <button class="filter-btn fav-btn"      onclick="filterMarkers('fav',this)">❤️ Favoris</button>
+  <button class="filter-btn"              onclick="filterMarkers('plage',this)">🏖️ Plages</button>
+  <button class="filter-btn resto-btn"    onclick="filterMarkers('resto',this)">🍝 Restos</button>
+  <button class="filter-btn street-btn"   onclick="filterMarkers('street',this)">🌮 Street food</button>
+  <button class="filter-btn delicat-btn"  onclick="filterMarkers('delicat',this)">🫙 Saveurs</button>
+  <button class="filter-btn"              onclick="filterMarkers('village',this)">🏘️ Villages</button>
+  <button class="filter-btn"              onclick="filterMarkers('kids',this)">👶 Kids</button>
+  <button class="filter-btn activity-btn" onclick="filterMarkers('activity',this)">🥾 Arrière-pays</button>
+  <button class="filter-btn"              onclick="filterMarkers('logement',this)">🏡 Logement</button>
+  <button class="filter-btn shop-btn"     onclick="filterMarkers('shop',this)">🛒 Épiceries</button>
+  <button class="filter-btn ev-btn"       onclick="filterMarkers('ev',this)">⚡ Recharge</button>
+</div>
+
+<div id="ev-note" style="display:none" class="ev-note">
+  ⚡ <b>KIA e-Niro :</b> CCS Combo2 (~100 kW DC) + Type 2 (AC).
+  <span class="card-tag tag-aller">🔴 Aller</span>
+  <span class="card-tag tag-retour">🔵 Retour</span>
+  <span class="card-tag tag-aller-retour">🟣 Les deux</span>
+  <b>Appli : Chargemap ou ABRP.</b>
+</div>
+
+<div id="map-wrapper">
+  <div id="map"></div>
+  <button id="loc-btn" onclick="toggleTracking()" title="Ma position">📍</button>
+</div>
+
+<div id="list"></div>
+
+<!-- BOTTOM SHEET -->
+<div id="sheet-overlay" onclick="closeSheet()"></div>
+<div id="sheet">
+  <div id="sheet-handle"></div>
+  <div id="sheet-scroll">
+    <div id="sheet-header">
+      <div id="sheet-icon">📍</div>
+      <div id="sheet-title-wrap">
+        <div id="sheet-name">Lieu</div>
+        <div id="sheet-category"></div>
+      </div>
+      <button id="sheet-fav-btn" onclick="toggleFavFromSheet()">🤍</button>
+    </div>
+    <div id="sheet-rating" style="display:none">
+      <span id="sheet-stars"></span>
+      <span id="sheet-rating-val"></span>
+      <span id="sheet-rating-count"></span>
+    </div>
+    <div id="sheet-tags"></div>
+    <div id="sheet-desc"></div>
+    <div id="sheet-hours" style="display:none">
+      <div id="sheet-hours-title">🕐 Horaires</div>
+      <div id="sheet-hours-content"></div>
+    </div>
+    <div id="sheet-actions"></div>
+  </div>
+</div>
+
+<!-- ROUTE PANEL -->
+<div id="route-panel">
+  <div id="route-header">
+    <h2 id="route-title">Itinéraire</h2>
+    <button id="route-close" onclick="closeRoute()">✕</button>
+  </div>
+  <div id="route-form">
+    <div class="route-row">
+      <span class="route-lbl">🟢</span>
+      <input id="from-input" class="route-input" placeholder="Départ (vide = ma position)"/>
+      <button style="background:none;border:none;font-size:18px;cursor:pointer;padding:4px" onclick="useMyPosition()" title="Ma position">📍</button>
+    </div>
+    <div class="route-row">
+      <span class="route-lbl">🔴</span>
+      <input id="to-input" class="route-input" placeholder="Destination" readonly/>
+    </div>
+    <div class="route-modes">
+      <button class="mode-btn active" onclick="setMode(this,'car')">🚗 Voiture</button>
+      <button class="mode-btn"        onclick="setMode(this,'foot')">🚶 À pied</button>
+      <button class="mode-btn"        onclick="setMode(this,'bike')">🚴 Vélo</button>
+    </div>
+    <button id="route-go" onclick="calcRoute()">Calculer l'itinéraire</button>
+  </div>
+  <div id="route-map"></div>
+  <div id="route-summary">Entrez un départ ou utilisez votre position.</div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ═══════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════
+const TYPE_ICON={logement:'🏡',plage:'🏖️',village:'🏘️',resto:'🍝',kids:'👶',ev:'⚡',shop:'🛒',activity:'🥾',delicat:'🫙',street:'🌮'};
+const CARD_CLASS={resto:'resto-card',shop:'shop-card',ev:'ev-card',activity:'activity-card',delicat:'delicat-card',street:'street-card'};
+const TAG_CLASS={ionity:'tag-ionity',total:'tag-total',becharge:'tag-becharge',goelec:'tag-goelec',freshmile:'tag-freshmile',vinci:'tag-vinci'};
+const DIRECTION_TAG={
+  aller:{cls:'tag-aller',label:'🔴 Aller'},retour:{cls:'tag-retour',label:'🔵 Retour'},
+  both:{cls:'tag-aller-retour',label:'🟣 Aller & retour'},place:{cls:'tag-becharge',label:'📍 Sur place'},
+};
+const COLOR_MAP={ev:'#2e9e5b',activity:'#d35400',delicat:'#1a6b5a',resto:'#c0392b',shop:'#8e44ad',street:'#b5451b',plage:'#2a6b8a',village:'#555',kids:'#e8a020',logement:'#2a6b8a'};
+const GROUP_LABEL={
+  logement:{icon:'🏡',label:'Logement'},plage:{icon:'🏖️',label:'Plages'},
+  resto:{icon:'🍝',label:'Restaurants'},street:{icon:'🌮',label:'Street food'},
+  delicat:{icon:'🫙',label:'Saveurs & emplettes'},village:{icon:'🏘️',label:'Villages'},
+  kids:{icon:'👶',label:'Kids & activités'},activity:{icon:'🥾',label:'Arrière-pays'},
+  shop:{icon:'🛒',label:'Épiceries'},ev:{icon:'⚡',label:'Bornes de recharge'},
+};
+
+// ═══════════════════════════════════════════════
+// DONNÉES
+// ═══════════════════════════════════════════════
+const places=[
+  // Logement
+  {name:'Villa Garnier',coords:[43.7815,7.6759],type:'logement',rating:4.6,ratingCount:221,
+   desc:'Hôtel-jardin avec vue mer, vieille ville Bordighera. Géré par des sœurs, ambiance unique.',
+   web:'https://www.villagarnier.it',hours:['Lun–Dim : 8h–22h']},
+
+  // Plages
+  {name:'Plage de Bordighera (publique)',coords:[43.7795,7.6567],type:'plage',
+   desc:'Plage de galets gratuite, calme, idéale avec enfants. Douches disponibles.',web:'https://www.bordighera.it'},
+  {name:'Spiaggia Kursaal (publique)',coords:[43.7787,7.6605],type:'plage',
+   desc:'Plage libre avec douches et vestiaires, panorama côte.',web:'https://www.bordighera.it'},
+  {name:'Balzi Rossi – snorkeling',coords:[43.7837,7.5367],type:'plage',rating:4.4,ratingCount:1178,
+   desc:'Eau turquoise limpide, idéal snorkeling. Club privé haut de gamme sur place (prévoir budget).',web:'https://www.laspiaggettadeibalzirossi.com'},
+
+  // Villages
+  {name:'Dolceacqua',coords:[43.8500,7.6232],type:'village',
+   desc:'Pont médiéval, ruelles et vin Rossese AOC. Peint par Monet. Marché le dimanche.',web:'https://www.comune.dolceacqua.im.it'},
+  {name:'Apricale',coords:[43.8799,7.6626],type:'village',
+   desc:'Village labyrinthe perché, l\'un des plus beaux d\'Italie. Fresques murales, panorama exceptionnel.',web:'https://www.borgoapricale.it'},
+  {name:'Seborga',coords:[43.8256,7.6945],type:'village',
+   desc:'La "micro-principauté" : monnaie propre, garde en uniforme, boutiques d\'artisanat.',web:'https://www.comune.seborga.im.it'},
+
+  // Kids
+  {name:'Menton',coords:[43.7750,7.5040],type:'kids',
+   desc:'Vieille ville colorée franco-italienne, plages, marché, jardin Serre de la Madone.',web:'https://www.menton.fr'},
+  {name:'Marché de Ventimiglia (vendredi)',coords:[43.7915,7.6075],type:'kids',
+   desc:'Grand marché all\'aperto le vendredi – fruits, olives, textile, épices. Authentique.',web:'https://www.comune.ventimiglia.im.it',
+   hours:['Vendredi : 7h–13h']},
+  {name:'Giardino Esotico Pallanca',coords:[43.7882,7.6876],type:'kids',rating:4.3,ratingCount:739,
+   desc:'+3 000 cactus et succulentes en terrasses avec vue mer. Chaussures conseillées.',web:'https://www.giardinopallanca.it',
+   hours:['Mar–Dim : 9h–17h','Lundi : Fermé']},
+
+  // Restaurants
+  {name:'Magiargè – Osteria Contemporanea',coords:[43.7805,7.6733],type:'resto',rating:4.4,ratingCount:847,
+   desc:'Cuisine ligure créative en vieille ville. Homard catalan, ragoût de lapin, desserts maison. Cave locale excellente.',web:'https://www.osteriamaiarge.it',
+   hours:['Mer–Dim : 12h30–14h & 19h30–22h','Lun–Mar : Fermé']},
+  {name:'Piccolo Bistrot Gourmet',coords:[43.7805,7.6730],type:'resto',rating:4.9,ratingCount:364,
+   desc:'La pépite de la vieille ville. Burrata de Naples, produits ultra-frais, couple passionné. Réserver absolument !',web:'https://www.facebook.com/piccolobistrotbordighera',
+   hours:['Mar–Dim : 18h–23h','Lundi : Fermé']},
+  {name:'Amarea – Romolo Mare',coords:[43.7768,7.6732],type:'resto',rating:4.4,ratingCount:1300,
+   desc:'Fruits de mer frais, terrasse vue mer Lungomare. Rouget entier, pasta alle vongole.',web:'https://www.ristoranteromomlomare.it',
+   hours:['Lun–Dim : 12h30–14h30 & 20h–22h15']},
+  {name:'Maoma Beach',coords:[43.7791,7.6589],type:'resto',rating:4.5,ratingCount:818,
+   desc:'Restaurant-plage, pâtes fraîches et poisson du jour. Vue mer, ambiance décontractée.',web:'https://www.maoma.it',
+   hours:['Lun–Ven : 12h–22h','Sam : 12h–15h','Dim : Fermé']},
+  {name:'CASAeBOTTEGA (Dolceacqua)',coords:[43.8511,7.6228],type:'resto',rating:4.6,ratingCount:1309,
+   desc:'Terrasse sur la place médiévale, cuisine locale. Spaghetti vongole, tagliata, Rossese.',web:'https://www.facebook.com/casaebottega.dolceacqua',
+   hours:['Lun–Mer & Dim : 12h–14h30','Ven–Sam : 12h–14h & 19h30–21h30','Jeudi : Fermé']},
+  {name:'Il Lupo – Smoke & Grill (Dolceacqua)',coords:[43.8523,7.6233],type:'resto',rating:4.8,ratingCount:838,
+   desc:'Viandes grillées et BBQ fumé au cœur du village historique. King of Rib légendaire.',web:'https://www.facebook.com/illuposmokeandgrill',
+   hours:['Lun & Mer–Dim : 12h–14h & 19h–22h','Mardi : Fermé']},
+  {name:'L\'Oasi del Rossese (agriturismo)',coords:[43.8653,7.6437],type:'resto',rating:4.6,ratingCount:107,
+   desc:'Repas dans un vignoble au-dessus de Dolceacqua. Cuisine maison spectaculaire, vue sur les collines. Réserver.',web:null},
+
+  // ─── STREET FOOD ───
+  {name:'Ale Bobo\'s – Pizza & Kebab',coords:[43.7804,7.6580],type:'street',rating:4.9,ratingCount:231,
+   desc:'Le meilleur kebab de la région selon des habitués de Berlin et Istanbul. Falafel maison, baklava, meze turcs. Ouvert jusqu\'à 3h du matin le week-end !',web:null,
+   hours:['Mar–Jeu & Dim : 11h30–2h','Ven : 11h30–3h','Sam : 11h30–5h30','Lundi : Fermé']},
+  {name:'U Pesigu – Sardenaira & focaccia',coords:[43.7798,7.6603],type:'street',rating:4.6,ratingCount:63,
+   desc:'Meilleure sardenaira de Bordighera (pizza ligure anchois-olives Taggiasca). Très bon marché, à emporter.',web:null,
+   hours:['Lun–Sam : 6h–20h','Dim : Fermé']},
+  {name:'Focacceria Del Corso',coords:[43.7813,7.6653],type:'street',rating:4.3,ratingCount:188,
+   desc:'Focaccia ligure fraîche du four dès 7h, farinata, sardenaira. Idéal petit-déj ou pique-nique plage.',web:null,
+   hours:['Lun–Sam : 7h–19h30','Dim : Fermé']},
+  {name:'Caveau Ramen',coords:[43.7793,7.6628],type:'street',rating:4.7,ratingCount:51,
+   desc:'Vrai ramen japonais dans un décor manga/Pokémon. Boissons japonaises importées, gyoza croustillants. Surprise totale à Bordighera !',web:null,
+   hours:['Lun & Mer–Dim : 12h–15h & 19h–23h','Mardi : Fermé']},
+  {name:'Amazonia – Burgers & Cocktails',coords:[43.7790,7.6636],type:'street',rating:4.7,ratingCount:78,
+   desc:'Meilleurs burgers de Bordighera, viande de qualité, bons cocktails. Ambiance jeune et décontractée.',web:null,
+   hours:['Lun & Mer–Dim : 7h–23h','Mardi : Fermé']},
+  {name:'Gang del Panino – Vallecrosia',coords:[43.7860,7.6395],type:'street',rating:4.8,ratingCount:207,
+   desc:'Paninis géants avec ingrédients frais découpés sous vos yeux. Choix impressionnant, bières artisanales italiennes. À 5 min de Bordighera.',web:null,
+   hours:['Lun–Ven : 10h30–14h30 & 18h30–21h15','Sam : 10h30–14h30','Dim : Fermé']},
+  {name:'Pescheria Luna Rossa – Frittura',coords:[43.7817,7.6536],type:'street',rating:4.4,ratingCount:34,
+   desc:'Poisson frit à emporter, directement du bateau. Crevettes de Sanremo, friture mixte. Unique à Bordighera.',web:null,
+   hours:['Mar–Ven : 9h–20h30','Sam : 9h30–12h30','Lun & Dim : Fermé']},
+  {name:'Street – Burgers & Food (Ventimiglia)',coords:[43.7881,7.6095],type:'street',rating:4.5,ratingCount:250,
+   desc:'Street food au bord de mer à Ventimiglia : burgers juteux, pasta, bière tap. Vue sur la mer.',web:null},
+
+  // ─── SAVEURS ───
+  {name:'Olio Salvo – Cave à huile "dal 1897"',coords:[43.7797,7.6692],type:'delicat',rating:4.6,ratingCount:107,
+   desc:'Huile d\'olive Taggiasca Ligurie depuis 1897, Via al Mercato. Olives, pesto, conserves artisanales.',web:'https://www.oliosalvo.it',
+   hours:['Lun–Mar & Jeu–Ven : 8h30–13h & 15h–19h','Sam : 8h30–12h30 & 15h–19h','Mer & Dim : Fermé']},
+  {name:'Frantoio Gaziello – Ventimiglia',coords:[43.7935,7.6068],type:'delicat',rating:4.8,ratingCount:184,
+   desc:'Moulin à huile traditionnel, huile primée, tomates séchées, artichauts, anchois dans l\'huile. Incontournable.',web:null,
+   hours:['Lun–Sam : 8h15–12h30 & 15h–19h30','Dim : Fermé']},
+  {name:'Food Light – Épicerie fine & charcuterie',coords:[43.7836,7.6778],type:'delicat',rating:4.8,ratingCount:253,
+   desc:'Épicerie fine hors des sentiers touristiques. Fromages, charcuterie, salades, fruits de mer. Café et glaces aussi. ★ 4.8',web:null,
+   hours:['Lun–Mer & Ven–Sam : 6h30–13h & 16h30–20h','Jeu : 6h30–13h','Dim : 7h–13h']},
+  {name:'Fratelli Ritzu – Salumeria (Ventimiglia)',coords:[43.7908,7.6116],type:'delicat',rating:4.8,ratingCount:18,
+   desc:'Charcuterie et fromages italiens d\'exception, pasta fraîche maison, sandwichs préparés au comptoir. Petit mais excellent.',web:null,
+   hours:['Lun–Mar & Jeu–Sam : 8h–17h30','Mer & Dim : Fermé']},
+  {name:'Salumeria Da Raffaele – Ventimiglia',coords:[43.7908,7.6095],type:'delicat',rating:4.5,ratingCount:19,
+   desc:'Charcuterie et fromages frais, épicerie italienne traditionnelle. Prix imbattables, rue piétonne centrale.',web:null,
+   hours:['Lun–Ven : 8h30–13h & 15h–19h','Ven–Sam : 8h30–19h','Dim : Fermé']},
+  {name:'EURODRINKS Wine – Bordighera',coords:[43.7789,7.6646],type:'delicat',rating:4.6,ratingCount:101,
+   desc:'Cave à vins et spiritueux exceptionnelle, sélection italienne au rez-de-chaussée et cave remarquable à l\'étage. Vins locaux, spiritueux monde entier.',web:null,
+   hours:['Lun–Mer & Ven–Sam : 9h–13h & 15h30–19h30','Jeu : 9h–19h30','Dim : 10h–13h & 16h–19h30']},
+  {name:'EURODRINKS Supermarché – Bevera',coords:[43.8027,7.5929],type:'delicat',rating:4.1,ratingCount:3175,
+   desc:'Le grand Eurodrinks à la frontière franco-italienne : vins, spiritueux, cigarettes et épicerie italienne à prix imbattables. Accessible depuis l\'autoroute.',web:null,
+   hours:['Lun–Sam : 6h30–21h','Dim : 8h30–20h30']},
+  {name:'Cantina del Rossese Gajaudo',coords:[43.9109,7.6500],type:'delicat',rating:4.4,ratingCount:195,
+   desc:'Dégustation du Rossese de Dolceacqua AOC et Pigato. Vente directe producteur à Isolabona.',web:null,
+   hours:['Lun–Sam : 9h–12h30']},
+  {name:'Corte Cremeria – Gelateria',coords:[43.7785,7.6666],type:'delicat',rating:4.6,ratingCount:366,
+   desc:'La meilleure gelato de Bordighera selon les locaux et les Niçois qui font 40 km exprès. Pistache légendaire.',web:null,
+   hours:['Lun & Mer–Dim : 12h–20h','Mardi : Fermé']},
+  {name:'Voglia di Gelato',coords:[43.7814,7.6545],type:'delicat',rating:4.6,ratingCount:749,
+   desc:'Gelato artisanale généreuse, grande portion, file rapide. Pistachio extraordinaire.',web:null,
+   hours:['Mar–Dim : 12h–19h (Sam jusqu\'à 20h)','Lundi : Fermé']},
+
+  // Épiceries
+  {name:'Carrefour Market – Bordighera',coords:[43.7786,7.6676],type:'shop',rating:3.5,
+   desc:'Grand supermarché ouvert 24h/24 – 7j/7. Rayon traiteur et fromages italiens.',web:'https://www.carrefour.it',
+   hours:['24h/24 – 7j/7']},
+  {name:'Carrefour Market – Ventimiglia',coords:[43.7902,7.6093],type:'shop',rating:3.8,
+   desc:'Supermarché central, ouvert jusqu\'à minuit. Via Roma, proche gare et marché.',web:'https://www.carrefour.it',
+   hours:['Lun–Ven & Dim : 7h–minuit','Sam : 7h–22h']},
+  {name:'EuroSpin – Ventimiglia',coords:[43.8028,7.5990],type:'shop',rating:4.3,
+   desc:'Supermarché discount, bons prix sur les produits italiens. Grand parking.',web:'https://www.eurospin.it',
+   hours:['Lun–Dim : 8h30–20h30']},
+  {name:'Alimentari Francesca – Dolceacqua',coords:[43.8516,7.6227],type:'shop',rating:4.6,
+   desc:'Épicerie locale : michette, focaccia du village, crocette. Produits typiques introuvables ailleurs.',web:null,
+   hours:['Mar–Sam : 7h45–12h45 (+ 16h30–19h certains jours)','Dim : Fermé']},
+  {name:'Alimentari Raimondo – Dolceacqua',coords:[43.8517,7.6234],type:'shop',rating:4.2,
+   desc:'Rossese, tacunà et produits du terroir. Propriétaire très sympathique.',web:null,
+   hours:['Lun–Mar & Jeu–Sam : 8h–13h & 15h30–19h30','Mer : 8h–13h','Dim : Fermé']},
+
+  // Arrière-pays
+  {name:'Triora – Village des sorcières',coords:[43.9929,7.7655],type:'activity',rating:4.4,ratingCount:708,
+   desc:'Village médiéval lié aux procès de sorcellerie du XVIe s. Atmosphère unique, musée ethnographique. ~1h.',web:'https://www.museoditriora.it',
+   hours:['Musée : Ven 15h–18h30 / Sam 12h30–18h30 / Dim 10h–18h30']},
+  {name:'Pigna & Laghetti del Rio Carne',coords:[43.9373,7.6549],type:'activity',rating:4.8,ratingCount:67,
+   desc:'Baignade en vasques naturelles cristallines au pied de Pigna. Eau fraîche, cadre sauvage. ~45 min.',web:'https://www.comune.pigna.im.it'},
+  {name:'Vallée des Merveilles – Tende',coords:[44.0751,7.4382],type:'activity',rating:4.8,ratingCount:212,
+   desc:'40 000 gravures rupestres préhistoriques dans le parc du Mercantour. Randonnée guidée conseillée. ~1h.',web:'https://www.valleedesmerveilles.com'},
+  {name:'Musée des Merveilles – Tende',coords:[44.0903,7.5926],type:'activity',rating:4.7,ratingCount:874,
+   desc:'Musée sur les gravures préhistoriques. Gratuit ★ 4.7. Idéal avec enfants. Fermé mardi.',web:'https://www.museedesmerveilles.com',
+   hours:['Mer & Jeu–Dim : 10h–17h','Mardi : Fermé']},
+  {name:'Monastère de Saorge',coords:[43.9848,7.5550],type:'activity',rating:4.6,ratingCount:358,
+   desc:'Couvent baroque perché sur falaise, vue gorges de la Roya. ~50 min.',web:'https://www.monuments-nationaux.fr',
+   hours:['Mar–Dim : 10h–13h & 14h–17h','Lundi : Fermé']},
+  {name:'Parc Alpi Liguri – Randonnées',coords:[43.9989,7.6874],type:'activity',rating:4.8,ratingCount:755,
+   desc:'Sentiers entre mer et montagne, faune sauvage, fleurs alpines. Vues incroyables. ~45 min.',web:'https://www.parcoalpiliguri.it'},
+  {name:'Guides Mercantour – Canyoning & Via ferrata',coords:[44.0891,7.5937],type:'activity',rating:4.9,ratingCount:185,
+   desc:'Canyoning et via ferrata encadrés, familles dès 10 ans. Petits groupes. ★ 4.9',web:'https://www.guides-mercantour.com',
+   hours:['Lun–Dim : 8h–20h']},
+  {name:'Parasio – Vieille ville d\'Imperia',coords:[43.8737,8.0143],type:'activity',rating:4.6,ratingCount:1815,
+   desc:'Quartier médiéval dominant la mer, ruelles colorées, vue panoramique. ~35 min.',web:'https://www.imperia.it'},
+];
+
+const evStations=[
+  {name:'Freshmile – Saint-Martin-de-Crau',coords:[43.6415,4.8120],type:'ev',network:'freshmile',networkLabel:'Freshmile',direction:'both',
+   desc:'22 kW Type 2 – Rue de la Transhumance. Chargez avant de partir !',web:'https://www.freshmile.com'},
+  {name:'TotalEnergies – Lançon-Provence (A7)',coords:[43.5889,5.1892],type:'ev',network:'total',networkLabel:'TotalEnergies',direction:'both',
+   desc:'Recharge rapide DC • A7 direction A8 – ~20 km du départ',web:'https://chargeplus.totalenergies.com'},
+  {name:'Ionity – Aire de Rousset (A8)',coords:[43.4714,5.6428],type:'ev',network:'ionity',networkLabel:'Ionity',direction:'both',
+   desc:'16 bornes 350 kW CCS • A8 proche Aix-en-Provence',web:'https://ionity.eu'},
+  {name:'Ionity – Aire de Brignoles (A8)',coords:[43.4239,5.9904],type:'ev',network:'ionity',networkLabel:'Ionity',direction:'both',
+   desc:'350 kW CCS • A8 entre Aix et Brignoles',web:'https://ionity.eu'},
+  {name:'TotalEnergies – Terrasses de Provence (A8)',coords:[43.5510,5.9000],type:'ev',network:'total',networkLabel:'TotalEnergies',direction:'both',
+   desc:'Recharge rapide CCS/Type 2 • A8 entre Aix et Brignoles',web:'https://chargeplus.totalenergies.com'},
+  {name:'Ionity – Aire de Vidauban (A8)',coords:[43.4190,6.4300],type:'ev',network:'ionity',networkLabel:'Ionity',direction:'both',
+   desc:'350 kW CCS • A8 entre Brignoles et Cannes',web:'https://ionity.eu'},
+  {name:'TotalEnergies – Aire de Mandelieu (A8)',coords:[43.5440,6.9400],type:'ev',network:'total',networkLabel:'TotalEnergies',direction:'both',
+   desc:'Recharge rapide • Dernière grande aire avant la frontière',web:'https://chargeplus.totalenergies.com'},
+  {name:'Ionity – Nice Ouest (A8)',coords:[43.6640,7.1960],type:'ev',network:'ionity',networkLabel:'Ionity',direction:'both',
+   desc:'Bornes rapides CCS • Option avant/après Menton',web:'https://ionity.eu'},
+  {name:'BeCharge – Via Romana, Bordighera',coords:[43.7820,7.6620],type:'ev',network:'becharge',networkLabel:'BeCharge',direction:'place',
+   desc:'AC Type 2 • Centre-ville, proche vieille ville',web:'https://www.becharge.eu'},
+  {name:'Go Electric – Lungomare Argentina',coords:[43.7795,7.6680],type:'ev',network:'goelec',networkLabel:'Go Electric',direction:'place',
+   desc:'AC Type 2 • Sur le front de mer',web:'https://www.goelectricstations.it'},
+  {name:'BeCharge – Ventimiglia centre',coords:[43.7915,7.6075],type:'ev',network:'becharge',networkLabel:'BeCharge',direction:'place',
+   desc:'AC Type 2 • Pratique lors du marché',web:'https://www.becharge.eu'},
+  {name:'Recharge – Menton Parking Rondelli',coords:[43.7760,7.5080],type:'ev',network:'vinci',networkLabel:'SDMC/Vinci',direction:'place',
+   desc:'AC Type 2 • Parking souterrain, étape Menton',web:'https://chargemap.com'},
+];
+
+const allPlaces=[...places,...evStations];
+
+// ═══════════════════════════════════════════════
+// FAVORIS
+// ═══════════════════════════════════════════════
+let favorites=new Set(JSON.parse(localStorage.getItem('bord-favs')||'[]'));
+function saveFavs(){localStorage.setItem('bord-favs',JSON.stringify([...favorites]));}
+function isFav(p){return favorites.has(p.name);}
+function toggleFav(p){isFav(p)?favorites.delete(p.name):favorites.add(p.name);saveFavs();updateFavCount();return isFav(p);}
+function updateFavCount(){const n=favorites.size,el=document.getElementById('fav-count');el.textContent=n+' ❤️';el.style.display=n?'inline':'none';}
+updateFavCount();
+
+// ═══════════════════════════════════════════════
+// MAP
+// ═══════════════════════════════════════════════
+const map=L.map('map').setView([43.7815,7.6759],13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+
+// Pré-cache tiles zone
+function prefetchTiles(){
+  if(!('fetch' in window)) return;
+  [[43.78,7.665],[43.85,7.62],[43.88,7.66]].forEach(([lat,lng])=>{
+    [13,14,15].forEach(z=>{
+      const n=Math.pow(2,z),tx=Math.floor((lng+180)/360*n),lr=lat*Math.PI/180,
+            ty=Math.floor((1-Math.log(Math.tan(lr)+1/Math.cos(lr))/Math.PI)/2*n);
+      [-1,0,1].forEach(dx=>[-1,0,1].forEach(dy=>fetch(`https://a.tile.openstreetmap.org/${z}/${tx+dx}/${ty+dy}.png`,{mode:'no-cors'}).catch(()=>{})));
+    });
+  });
+}
+setTimeout(prefetchTiles,2500);
+
+function makeColorIcon(bg,emoji,sel=false){
+  return L.divIcon({className:'',
+    html:`<div style="position:relative;background:${bg};color:white;border-radius:50%;width:${sel?32:26}px;height:${sel?32:26}px;display:flex;align-items:center;justify-content:center;font-size:${sel?15:13}px;box-shadow:${sel?`0 0 0 3px white,0 0 0 5px ${bg}`:'0 2px 5px rgba(0,0,0,.3)'};transition:all .25s">${emoji}${sel?`<span style="position:absolute;inset:0;border-radius:50%;background:${bg}40;animation:pulse-ring 1.5s ease-out infinite"></span>`:''}</div>`,
+    iconSize:sel?[32,32]:[26,26],iconAnchor:sel?[16,16]:[13,13]});
+}
+
+function iconForPlace(p,sel=false){
+  const bg=COLOR_MAP[p.type]||'#555',em=TYPE_ICON[p.type]||'📍';
+  if(!sel&&p.type!=='ev'&&p.type!=='activity'&&p.type!=='delicat'&&p.type!=='street') return new L.Icon.Default();
+  return makeColorIcon(bg,em,sel);
+}
+
+// Géoloc
+let watchId=null,userMarker=null,tracking=false,userLatLng=null;
+function toggleTracking(){
+  if(!navigator.geolocation){alert('Géolocalisation non disponible.');return;}
+  if(tracking){
+    navigator.geolocation.clearWatch(watchId);
+    if(userMarker){map.removeLayer(userMarker);userMarker=null;}
+    document.getElementById('loc-btn').classList.remove('tracking');
+    document.getElementById('loc-btn').textContent='📍';
+    tracking=false;userLatLng=null;
+  } else {
+    document.getElementById('loc-btn').textContent='⏳';
+    watchId=navigator.geolocation.watchPosition(pos=>{
+      userLatLng=[pos.coords.latitude,pos.coords.longitude];
+      if(!userMarker){
+        userMarker=L.circleMarker(userLatLng,{radius:9,color:'#2a6b8a',fillColor:'#2a6b8a',fillOpacity:.85}).addTo(map).bindPopup('📍 Vous êtes ici');
+        map.setView(userLatLng,15);
+      } else userMarker.setLatLng(userLatLng);
+      document.getElementById('loc-btn').classList.add('tracking');
+      document.getElementById('loc-btn').textContent='🔵';
+      tracking=true;
+    },()=>{document.getElementById('loc-btn').textContent='📍';},{enableHighAccuracy:true,maximumAge:5000});
+  }
+}
+
+// ═══════════════════════════════════════════════
+// ÉTAT + SÉLECTION
+// ═══════════════════════════════════════════════
+let markers=[],currentFiltered=[],selectedIdx=-1;
+const placeMarkerMap=new Map();
+let currentFilterType='all',currentSearchQuery='';
+
+function deselectCurrent(){
+  if(selectedIdx>=0){const p=currentFiltered[selectedIdx];if(p){const m=placeMarkerMap.get(p);if(m)m.setIcon(iconForPlace(p,false));}selectedIdx=-1;}
+  document.querySelectorAll('.card.selected').forEach(c=>c.classList.remove('selected'));
+}
+
+// Clic simple = focus map SEULEMENT (pas de fiche)
+function focusMarker(idx){
+  const p=currentFiltered[idx];if(!p)return;
+  deselectCurrent();
+  selectedIdx=idx;
+  const m=placeMarkerMap.get(p);
+  if(m)m.setIcon(iconForPlace(p,true));
+  const card=document.getElementById('card-'+idx);
+  if(card)card.classList.add('selected');
+  // Scroll vers la carte
+  document.getElementById('map-wrapper').scrollIntoView({behavior:'smooth',block:'start'});
+  setTimeout(()=>{
+    map.flyTo(p.coords,16,{animate:true,duration:.5});
+    if(m)setTimeout(()=>m.openPopup(),620);
+  },260);
+}
+
+// Bouton ℹ️ = fiche détaillée
+function openSheetForIdx(idx){
+  const p=currentFiltered[idx];if(p)openSheet(p);
+}
+
+// ═══════════════════════════════════════════════
+// BOTTOM SHEET
+// ═══════════════════════════════════════════════
+let sheetPlace=null;
+function starsHtml(r){let s='';const f=Math.floor(r);for(let i=0;i<f;i++)s+='★';if(r-f>=.5)s+='½';return s;}
+
+function openSheet(p){
+  sheetPlace=p;
+  document.getElementById('sheet-icon').textContent=TYPE_ICON[p.type]||'📍';
+  document.getElementById('sheet-name').textContent=p.name;
+  document.getElementById('sheet-category').textContent=GROUP_LABEL[p.type]?.label||'';
+  document.getElementById('sheet-fav-btn').textContent=isFav(p)?'❤️':'🤍';
+  document.getElementById('sheet-desc').textContent=p.desc||'';
+  const rEl=document.getElementById('sheet-rating');
+  if(p.rating){document.getElementById('sheet-stars').textContent=starsHtml(p.rating);document.getElementById('sheet-rating-val').textContent=p.rating;document.getElementById('sheet-rating-count').textContent=p.ratingCount?`(${p.ratingCount} avis)`:'';rEl.style.display='flex';}
+  else rEl.style.display='none';
+  const tagsEl=document.getElementById('sheet-tags');
+  tagsEl.innerHTML='';
+  if(p.networkLabel)tagsEl.innerHTML+=`<span class="card-tag ${TAG_CLASS[p.network]||''}">${p.networkLabel}</span>`;
+  if(p.direction)tagsEl.innerHTML+=`<span class="card-tag ${DIRECTION_TAG[p.direction].cls}">${DIRECTION_TAG[p.direction].label}</span>`;
+  const hEl=document.getElementById('sheet-hours');
+  if(p.hours?.length){document.getElementById('sheet-hours-content').innerHTML=p.hours.join('<br>');hEl.style.display='block';}
+  else hEl.style.display='none';
+  const aEl=document.getElementById('sheet-actions');
+  const webBtn=p.web?`<button class="sheet-btn secondary" onclick="window.open('${p.web}','_blank')">🌐 Site web</button>`:'';
+  aEl.innerHTML=`<button class="sheet-btn primary" onclick="openRoutePanel(${allPlaces.indexOf(p)});closeSheet()">🧭 Itinéraire</button>${webBtn}`;
+  document.getElementById('sheet-overlay').classList.add('open');
+  document.getElementById('sheet').classList.add('open');
+  document.body.style.overflow='hidden';
+}
+
+function closeSheet(){
+  document.getElementById('sheet').classList.remove('open');
+  document.getElementById('sheet-overlay').classList.remove('open');
+  document.body.style.overflow='';sheetPlace=null;
+}
+
+function toggleFavFromSheet(){
+  if(!sheetPlace)return;
+  const on=toggleFav(sheetPlace);
+  document.getElementById('sheet-fav-btn').textContent=on?'❤️':'🤍';
+  document.querySelectorAll(`.fav-star[data-name="${CSS.escape(sheetPlace.name)}"]`).forEach(b=>{b.textContent=on?'❤️':'🤍';});
+  if(currentFilterType==='fav')applyFilter('fav',currentSearchQuery);
+}
+
+// ═══════════════════════════════════════════════
+// RENDU LISTE
+// ═══════════════════════════════════════════════
+function renderPopup(p){
+  const tag=p.networkLabel?`<span style="background:#dff0ea;color:#1a7a4a;padding:1px 5px;border-radius:8px;font-size:10px;font-weight:600">${p.networkLabel}</span> `:'';
+  return `<b>${p.name}</b><br>${tag}<small style="color:#666">${p.desc.substring(0,80)}…</small><br><span style="color:#1a7a4a;font-size:11px;cursor:pointer;text-decoration:underline" onclick="openSheetFromPopup(${allPlaces.indexOf(p)})">📋 Voir la fiche</span>`;
+}
+function openSheetFromPopup(idx){openSheet(allPlaces[idx]);}
+
+function renderCard(p,idx){
+  const cc=CARD_CLASS[p.type]||'';
+  const rStr=p.rating?`<span style="color:#e8a020">★${p.rating}</span> · `:'';
+  const netTag=p.network?`<span class="card-tag ${TAG_CLASS[p.network]||''}" style="margin-right:3px">${p.networkLabel}</span>`:'';
+  const dirTag=p.direction?`<span class="card-tag ${DIRECTION_TAG[p.direction].cls}">${DIRECTION_TAG[p.direction].label}</span>`:'';
+  const tagsHtml=(netTag||dirTag)?`<div style="margin-bottom:3px">${netTag}${dirTag}</div>`:'';
+  return `
+    <div class="card ${cc}" id="card-${idx}" onclick="focusMarker(${idx})">
+      <div class="card-left">
+        <div class="card-icon">${TYPE_ICON[p.type]||'📍'}</div>
+        <button class="fav-star" data-name="${p.name.replace(/"/g,'&quot;')}"
+          onclick="event.stopPropagation();toggleFavCard(${idx},this)"
+          title="${isFav(p)?'Retirer des favoris':'Ajouter aux favoris'}">${isFav(p)?'❤️':'🤍'}</button>
+      </div>
+      <div class="card-mid">
+        ${tagsHtml}
+        <div class="card-name">${p.name}</div>
+        <div class="card-meta">${rStr}${GROUP_LABEL[p.type]?.label||''}</div>
+        <div class="card-desc-short">${p.desc}</div>
+      </div>
+      <button class="info-btn" onclick="event.stopPropagation();openSheetForIdx(${idx})" title="Voir la fiche">ℹ️</button>
+    </div>`;
+}
+
+function toggleFavCard(idx,btn){
+  const p=currentFiltered[idx];if(!p)return;
+  const on=toggleFav(p);
+  btn.textContent=on?'❤️':'🤍';
+  if(currentFilterType==='fav')applyFilter('fav',currentSearchQuery);
+}
+
+function renderGroupedList(filtered){
+  const el=document.getElementById('list');
+  el.innerHTML='';
+  if(!filtered.length){el.innerHTML='<div class="search-empty">Aucun résultat 🤷</div>';return;}
+  const order=['logement','plage','resto','street','delicat','village','kids','activity','shop','ev'];
+  const groups={};
+  filtered.forEach((p,i)=>{if(!groups[p.type])groups[p.type]=[];groups[p.type].push({p,i});});
+  order.forEach(type=>{
+    if(!groups[type]?.length)return;
+    const gl=GROUP_LABEL[type]||{icon:'📍',label:type};
+    el.innerHTML+=`<div class="group-header"><span>${gl.icon}</span>${gl.label}<span class="group-count">${groups[type].length}</span></div>`;
+    groups[type].forEach(({p,i})=>{el.innerHTML+=renderCard(p,i);});
+  });
+}
+
+function applyFilter(type,query=''){
+  markers.forEach(m=>map.removeLayer(m));markers=[];placeMarkerMap.clear();deselectCurrent();
+  document.getElementById('ev-note').style.display='none';
+  let base;
+  if(type==='fav')      base=allPlaces.filter(p=>isFav(p));
+  else if(type==='ev')  {base=evStations;document.getElementById('ev-note').style.display='block';}
+  else if(type==='all') base=allPlaces;
+  else                  base=places.filter(p=>p.type===type);
+  const q=query.toLowerCase().trim();
+  const filtered=q?base.filter(p=>p.name.toLowerCase().includes(q)||p.desc.toLowerCase().includes(q)):base;
+  currentFiltered=filtered;
+  const bounds=[];
+  filtered.forEach(p=>{
+    const m=L.marker(p.coords,{icon:iconForPlace(p,false)}).addTo(map).bindPopup(renderPopup(p));
+    markers.push(m);placeMarkerMap.set(p,m);bounds.push(p.coords);
+  });
+  renderGroupedList(filtered);
+  if(bounds.length)map.fitBounds(bounds,{padding:[40,40]});
+}
+
+function filterMarkers(type,btn){
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  currentFilterType=type;
+  applyFilter(type,currentSearchQuery);
+}
+
+// ═══════════════════════════════════════════════
+// RECHERCHE
+// ═══════════════════════════════════════════════
+let searchTimer=null;
+function onSearch(val){
+  currentSearchQuery=val;
+  document.getElementById('search-clear').style.display=val?'block':'none';
+  clearTimeout(searchTimer);
+  searchTimer=setTimeout(()=>applyFilter(currentFilterType,val),200);
+}
+function clearSearch(){
+  document.getElementById('search-input').value='';
+  document.getElementById('search-clear').style.display='none';
+  currentSearchQuery='';applyFilter(currentFilterType,'');
+}
+
+// ═══════════════════════════════════════════════
+// ITINÉRAIRE OSRM
+// ═══════════════════════════════════════════════
+let routeMap=null,routePolyline=null,routeFromMarker=null,routeToMarker=null;
+let routeDestCoords=null,routeDestName='',routeMode='car';
+const OSRM={car:'driving',foot:'walking',bike:'cycling'};
+
+function setMode(btn,mode){document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');routeMode=mode;}
+
+function openRoutePanel(globalIdx){
+  const p=allPlaces[globalIdx];if(!p)return;
+  routeDestCoords=p.coords;routeDestName=p.name;
+  document.getElementById('route-title').textContent='→ '+p.name;
+  document.getElementById('to-input').value=p.name;
+  if(userLatLng)document.getElementById('from-input').value='Ma position';
+  document.getElementById('route-summary').textContent='Entrez un départ ou utilisez votre position.';
+  document.getElementById('route-panel').classList.add('open');
+  document.body.style.overflow='hidden';
+  setTimeout(()=>{
+    if(!routeMap){routeMap=L.map('route-map').setView(p.coords,14);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(routeMap);}
+    routeMap.invalidateSize();clearRouteMapLayers();
+    routeToMarker=L.marker(p.coords).addTo(routeMap).bindPopup(`<b>🔴 ${p.name}</b>`).openPopup();
+    routeMap.setView(p.coords,14);
+  },150);
+}
+
+function closeRoute(){document.getElementById('route-panel').classList.remove('open');document.body.style.overflow='';}
+
+function clearRouteMapLayers(){
+  if(routePolyline){routeMap.removeLayer(routePolyline);routePolyline=null;}
+  if(routeFromMarker){routeMap.removeLayer(routeFromMarker);routeFromMarker=null;}
+  if(routeToMarker){routeMap.removeLayer(routeToMarker);routeToMarker=null;}
+}
+
+function useMyPosition(){
+  if(!navigator.geolocation){alert('Géolocalisation non disponible.');return;}
+  document.getElementById('from-input').value='Chargement…';
+  navigator.geolocation.getCurrentPosition(pos=>{userLatLng=[pos.coords.latitude,pos.coords.longitude];document.getElementById('from-input').value='Ma position';},
+  ()=>{document.getElementById('from-input').value='';},{enableHighAccuracy:true,timeout:8000});
+}
+
+async function geocode(q){
+  const r=await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1`,{headers:{'Accept-Language':'fr'}});
+  const d=await r.json();return d?.length?[parseFloat(d[0].lat),parseFloat(d[0].lon)]:null;
+}
+
+async function calcRoute(){
+  if(!routeDestCoords){alert('Destination non définie.');return;}
+  const fromVal=document.getElementById('from-input').value.trim();
+  const btn=document.getElementById('route-go');
+  btn.disabled=true;btn.textContent='Calcul…';
+  document.getElementById('route-summary').textContent='Calcul en cours…';
+  let fc=null;
+  if(!fromVal||fromVal==='Ma position'){
+    if(userLatLng)fc=userLatLng;
+    else{try{await new Promise((res,rej)=>navigator.geolocation.getCurrentPosition(p=>{userLatLng=[p.coords.latitude,p.coords.longitude];fc=userLatLng;res();},rej,{enableHighAccuracy:true,timeout:7000}));}catch{alert('Position introuvable.');btn.disabled=false;btn.textContent='Calculer l\'itinéraire';return;}}
+  } else {fc=await geocode(fromVal);if(!fc){alert('Adresse introuvable.');btn.disabled=false;btn.textContent='Calculer l\'itinéraire';return;}}
+  const profile=OSRM[routeMode];
+  try{
+    const r=await fetch(`https://router.project-osrm.org/route/v1/${profile}/${fc[1]},${fc[0]};${routeDestCoords[1]},${routeDestCoords[0]}?overview=full&geometries=geojson`);
+    const data=await r.json();
+    if(data.code!=='Ok'||!data.routes?.length)throw 0;
+    const route=data.routes[0];
+    const dist=(route.distance/1000).toFixed(1),dur=Math.round(route.duration/60);
+    const h=Math.floor(dur/60),m=dur%60,durStr=h>0?`${h}h${m.toString().padStart(2,'0')}`:`${m} min`;
+    clearRouteMapLayers();
+    routePolyline=L.geoJSON(route.geometry,{style:{color:'#2a6b8a',weight:5,opacity:.8}}).addTo(routeMap);
+    routeFromMarker=L.circleMarker(fc,{radius:9,color:'#2e9e5b',fillColor:'#2e9e5b',fillOpacity:.9}).addTo(routeMap).bindPopup('🟢 Départ');
+    routeToMarker=L.marker(routeDestCoords).addTo(routeMap).bindPopup(`<b>🔴 ${routeDestName}</b>`).openPopup();
+    routeMap.fitBounds(routePolyline.getBounds(),{padding:[30,30]});
+    document.getElementById('route-summary').innerHTML=`📏 <b>${dist} km</b> &nbsp;|&nbsp; ⏱ <b>${durStr}</b> &nbsp;|&nbsp; <a href="https://www.openstreetmap.org/directions?engine=fossgis_osrm_${profile}&route=${fc[0]},${fc[1]};${routeDestCoords[0]},${routeDestCoords[1]}" target="_blank" style="color:var(--ocean)">Ouvrir sur OSM ↗</a>`;
+  }catch{document.getElementById('route-summary').textContent='Impossible de calculer l\'itinéraire.';}
+  btn.disabled=false;btn.textContent='Calculer l\'itinéraire';
+}
+
+// ═══════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════
+applyFilter('all','');
+window.addEventListener('resize',()=>{map.invalidateSize();if(routeMap)routeMap.invalidateSize();});
+</script>
+</body>
+</html>
